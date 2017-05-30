@@ -42,16 +42,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ScreenCapture")
 	void TriggerAllCamera();
 
-	
-
 protected:
 	void SpawnCameras();
 	ASceneCapture2D* SpawnCamera(const CameraInfo& info) const;
 	void SpawnHelperLines();
-	void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString Filename);
 
+
+	//capture related 
+	void SaveAllCamera_Separate();
+	void SaveAllCamera_Single();
+
+	void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString Filename);
 
 	TArray<CameraInfo> CameraInformation;
 	TArray<class ASceneCapture2D*> Cameras;
 
+private:
+	float resolution;
 };

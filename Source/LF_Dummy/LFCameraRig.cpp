@@ -23,6 +23,7 @@ void ALFCameraRig::BeginPlay()
 	
 	NumCameraXbyX = FVector2D(9, 9);
 	CameraGap_mm = 10;
+	resolution = 256;
 
 	SpawnCameras();
 }
@@ -74,13 +75,11 @@ ASceneCapture2D* ALFCameraRig::SpawnCamera(const CameraInfo& info) const
 		{
 			if (class UTextureRenderTarget2D* lTextureRender = NewObject<UTextureRenderTarget2D>())
 			{
-				//lTexture->SizeX = 512.f;
-				//lTexture->SizeY = 512.f;
-				lTextureRender->InitAutoFormat(1296.f, 1032.f);
+				lTextureRender->InitAutoFormat(resolution, resolution);
 				lTextureRender->UpdateResource();
 
 				captureComp->Deactivate();
-				captureComp->FOVAngle = 60.f;
+				captureComp->FOVAngle = 120.f;
 				captureComp->TextureTarget = lTextureRender;
 				captureComp->bCaptureEveryFrame = false;
 				captureComp->bAutoActivate = false;
@@ -96,7 +95,6 @@ ASceneCapture2D* ALFCameraRig::SpawnCamera(const CameraInfo& info) const
 
 				captureComp->UpdateContent();
 				captureComp->PostEditChange();
-				//lSCC->Activate();
 				return myCapture;
 			}
 		}
@@ -117,8 +115,44 @@ void ALFCameraRig::SpawnHelperLines()
  
 void ALFCameraRig::TriggerAllCamera()
 {
-	UE_LOG(RigSimulator, Display, TEXT("taking screenshot."));
+	UE_LOG(RigSimulator, Display, TEXT("trigger all camera."));
+	SaveAllCamera_Single();
+}
 
+void ALFCameraRig::SaveAllCamera_Single()
+{
+
+	TArray<FColor> OutBMP_SingleImage;
+	OutBMP_SingleImage.SetNum(resolution * NumCameraXbyX.X * NumCameraXbyX.Y);
+
+	for (const auto& entry : Cameras)
+	{
+		// Same as with the Object Iterator, access the subclass instance with the * or -> operators.
+		FString filename = TEXT("LF_SingleOutput.png");
+		FString fullPath = OutputPath;
+		fullPath /= filename;
+		
+		UTextureRenderTarget2D* t = entry->GetCaptureComponent2D()->TextureTarget;
+		check(t);
+
+		FTextureRenderTargetResource* RTResource = t->GameThread_GetRenderTargetResource();
+
+		FReadSurfaceDataFlags ReadPixelFlags(RCM_UNorm);
+		ReadPixelFlags.SetLinearToGamma(true);
+
+		TArray<FColor> OutBMP;
+		RTResource->ReadPixels(OutBMP, ReadPixelFlags);
+
+		for (FColor& color : OutBMP)
+		{
+			color.A = 255;
+		}
+
+	}
+}
+
+void ALFCameraRig::SaveAllCamera_Separate()
+{
 	for (const auto& entry : Cameras)
 	{
 		// Same as with the Object Iterator, access the subclass instance with the * or -> operators.
@@ -133,12 +167,12 @@ void ALFCameraRig::TriggerAllCamera()
 			SaveRenderTargetToDisk(t, fullPath);
 		}
 
-//		capture->TakeSnapshot(*filename);
 		UE_LOG(RigSimulator, Log, TEXT("writing png for (%s)"), *capture->GetName());
 
 		//WriteToJson(*capture);
 	}
 }
+
 
 void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString Filename)
 {
