@@ -9,6 +9,7 @@
 struct CameraInfo
 {
 	FVector Pos;
+	FRotator Rot;
 };
 
 UCLASS()
@@ -32,11 +33,25 @@ public:
 	UPROPERTY(EditAnywhere)
 	float CameraGap_mm;
 
+	UPROPERTY(EditAnywhere)
+	ASceneCapture2D* ReferenceForClone;
+
+	UPROPERTY(EditAnywhere)
+	FString OutputPath;
+
+	UFUNCTION(BlueprintCallable, Category = "ScreenCapture")
+	void TriggerAllCamera();
+
+	
+
 protected:
 	void SpawnCameras();
-	void DrawHelperLines();
+	ASceneCapture2D* SpawnCamera(const CameraInfo& info) const;
+	void SpawnHelperLines();
+	void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString Filename);
 
 
 	TArray<CameraInfo> CameraInformation;
+	TArray<class ASceneCapture2D*> Cameras;
 
 };
