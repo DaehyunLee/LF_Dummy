@@ -8,6 +8,8 @@
 
 struct CameraInfo
 {
+	FIntPoint CameraPosition;
+
 	FVector Pos;
 	FRotator Rot;
 };
@@ -28,7 +30,7 @@ public:
 	virtual void Tick( float DeltaSeconds ) override;
 
 	UPROPERTY(EditAnywhere)
-	FVector2D NumCameraXbyX;
+	FIntPoint NumCameraXbyX;
 
 	UPROPERTY(EditAnywhere)
 	float CameraGap_mm;
@@ -43,20 +45,28 @@ public:
 	void TriggerAllCamera();
 
 protected:
+	struct CaptureCamera
+	{
+		CameraInfo info;
+		class ASceneCapture2D* capture2d;
+	};
+
+
 	void SpawnCameras();
 	ASceneCapture2D* SpawnCamera(const CameraInfo& info) const;
 	void SpawnHelperLines();
-
 
 	//capture related 
 	void SaveAllCamera_Separate();
 	void SaveAllCamera_Single();
 
-	void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString Filename);
+	void CopyColorBuffer(const TArray<FColor>& input, int resolution, FIntPoint position, TArray<FColor>& output);
+
+	void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString filename);
 
 	TArray<CameraInfo> CameraInformation;
-	TArray<class ASceneCapture2D*> Cameras;
+	TArray<CaptureCamera> Cameras;
 
 private:
-	float resolution;
+	int resolution;
 };
