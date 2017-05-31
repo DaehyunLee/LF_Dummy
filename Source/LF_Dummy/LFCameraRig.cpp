@@ -151,6 +151,14 @@ void ALFCameraRig::SaveAllCamera_Single()
 	FString filename = TEXT("LF_SingleOutput.png");
 	FString fullPath = OutputPath;
 	fullPath /= filename;
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	int postfix = 1;
+	while (PlatformFile.FileExists(*fullPath))
+	{
+		FString filename = TEXT("LF_SingleOutput_") + FString::FormatAsNumber(postfix) + TEXT(".png");
+		fullPath = OutputPath / filename;
+		postfix++;
+	}
 
 	FString ResultPath;
 	FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
