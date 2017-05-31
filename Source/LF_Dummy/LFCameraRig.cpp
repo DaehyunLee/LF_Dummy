@@ -10,6 +10,7 @@ DEFINE_LOG_CATEGORY_STATIC(RigSimulator, Log, All);
 
 // Sets default values
 ALFCameraRig::ALFCameraRig()
+	:NumCameraXbyX(32, 32)
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -21,8 +22,8 @@ void ALFCameraRig::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	NumCameraXbyX = FVector2D(9, 9);
 	CameraGap_mm = 10;
+	resolution = 256;
 
 	SpawnCameras();
 }
@@ -43,6 +44,9 @@ void ALFCameraRig::SpawnCameras()
 		{
 			CameraInfo& info = CameraInformation[iy*NumCameraXbyX.X + ix];
 
+			info.CameraPosition.X = ix;
+			info.CameraPosition.Y = iy;
+
 			info.Pos.X = GetActorLocation().X ;
 			info.Pos.Y = GetActorLocation().Y + ix*CameraGap_mm;
 			info.Pos.Z = GetActorLocation().Z + iy*CameraGap_mm;
@@ -57,9 +61,12 @@ void ALFCameraRig::SpawnCameras()
 	//Spawn actual camera.
 	for (const auto & info : CameraInformation)
 	{
-		Cameras.Add(SpawnCamera(info));
-	}
+		CaptureCamera camera;
+		camera.info = info;
+		camera.capture2d = SpawnCamera(info);
 
+		Cameras.Add(camera);
+	}
 }
 
 ASceneCapture2D* ALFCameraRig::SpawnCamera(const CameraInfo& info) const
@@ -74,13 +81,11 @@ ASceneCapture2D* ALFCameraRig::SpawnCamera(const CameraInfo& info) const
 		{
 			if (class UTextureRenderTarget2D* lTextureRender = NewObject<UTextureRenderTarget2D>())
 			{
-				//lTexture->SizeX = 512.f;
-				//lTexture->SizeY = 512.f;
-				lTextureRender->InitAutoFormat(1296.f, 1032.f);
+				lTextureRender->InitAutoFormat(resolution, resolution);
 				lTextureRender->UpdateResource();
 
 				captureComp->Deactivate();
-				captureComp->FOVAngle = 60.f;
+				captureComp->FOVAngle = 120.f;
 				captureComp->TextureTarget = lTextureRender;
 				captureComp->bCaptureEveryFrame = false;
 				captureComp->bAutoActivate = false;
@@ -96,7 +101,6 @@ ASceneCapture2D* ALFCameraRig::SpawnCamera(const CameraInfo& info) const
 
 				captureComp->UpdateContent();
 				captureComp->PostEditChange();
-				//lSCC->Activate();
 				return myCapture;
 			}
 		}
@@ -117,30 +121,82 @@ void ALFCameraRig::SpawnHelperLines()
  
 void ALFCameraRig::TriggerAllCamera()
 {
-	UE_LOG(RigSimulator, Display, TEXT("taking screenshot."));
+	UE_LOG(RigSimulator, Display, TEXT("trigger all camera."));
+	SaveAllCamera_Single();
+}
+
+void ALFCameraRig::SaveAllCamera_Single()
+{
+	TArray<FColor> OutBMP_SingleImage;
+	FIntPoint singeImageSize = NumCameraXbyX * resolution;
+	OutBMP_SingleImage.SetNum(singeImageSize.X * singeImageSize.Y);
 
 	for (const auto& entry : Cameras)
 	{
 		// Same as with the Object Iterator, access the subclass instance with the * or -> operators.
-		ASceneCapture2D *capture = entry;
+		UTextureRenderTarget2D* t = entry.capture2d->GetCaptureComponent2D()->TextureTarget;
+		check(t);
+
+		FTextureRenderTargetResource* RTResource = t->GameThread_GetRenderTargetResource();
+
+		FReadSurfaceDataFlags ReadPixelFlags(RCM_UNorm);
+		ReadPixelFlags.SetLinearToGamma(true);
+
+		TArray<FColor> OutBMP;
+		RTResource->ReadPixels(OutBMP, ReadPixelFlags);
+
+		CopyColorBuffer(OutBMP, resolution, entry.info.CameraPosition, OutBMP_SingleImage);
+	}
+
+	FString filename = TEXT("LF_SingleOutput.png");
+	FString fullPath = OutputPath;
+	fullPath /= filename;
+
+	FString ResultPath;
+	FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
+	HighResScreenshotConfig.SaveImage(fullPath, OutBMP_SingleImage, singeImageSize, &ResultPath);
+	UE_LOG(RigSimulator, Log, TEXT("file written. (%s)"), *ResultPath);
+}
+
+void ALFCameraRig::CopyColorBuffer(const TArray<FColor>& input, int resolution, FIntPoint position, TArray<FColor>& output)
+{
+	FIntPoint fullResolution(NumCameraXbyX.X * resolution, NumCameraXbyX.Y * resolution);
+	FIntPoint pointInOutput(position.X * resolution, position.Y * resolution);
+
+	for (int ix = 0; ix < resolution; ix++)
+		for (int iy = 0; iy < resolution; iy++)
+		{
+			int inputIndex = ix + iy*resolution;
+			int outputIndex = (ix + pointInOutput.X) + ((iy + pointInOutput.Y)* fullResolution.X);
+
+			output[outputIndex] = input[inputIndex];
+			output[outputIndex].A = 255;
+		}
+}
+
+
+void ALFCameraRig::SaveAllCamera_Separate()
+{
+	for (const auto& entry : Cameras)
+	{
+		// Same as with the Object Iterator, access the subclass instance with the * or -> operators.
+		ASceneCapture2D *capture = entry.capture2d;
 
 		FString filename = FString::Printf(TEXT("rigSimCalib%s.png"), *capture->GetActorLabel());
 
 		FString fullPath = OutputPath;
 		fullPath /= filename;
-		if (UTextureRenderTarget2D* t = entry->GetCaptureComponent2D()->TextureTarget)
+		if (UTextureRenderTarget2D* t = capture->GetCaptureComponent2D()->TextureTarget)
 		{
 			SaveRenderTargetToDisk(t, fullPath);
 		}
 
-//		capture->TakeSnapshot(*filename);
 		UE_LOG(RigSimulator, Log, TEXT("writing png for (%s)"), *capture->GetName());
-
-		//WriteToJson(*capture);
 	}
 }
 
-void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString Filename)
+
+void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget, FString filename)
 {
 	FTextureRenderTargetResource* RTResource = InRenderTarget->GameThread_GetRenderTargetResource();
 
@@ -160,6 +216,6 @@ void ALFCameraRig::SaveRenderTargetToDisk(UTextureRenderTarget2D* InRenderTarget
 
 	FString ResultPath;
 	FHighResScreenshotConfig& HighResScreenshotConfig = GetHighResScreenshotConfig();
-	HighResScreenshotConfig.SaveImage(Filename, OutBMP, DestSize, &ResultPath);
+	HighResScreenshotConfig.SaveImage(filename, OutBMP, DestSize, &ResultPath);
 	UE_LOG(RigSimulator, Log, TEXT("file written. (%s)"), *ResultPath);
 }
