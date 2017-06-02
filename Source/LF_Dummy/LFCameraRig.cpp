@@ -11,6 +11,7 @@ DEFINE_LOG_CATEGORY_STATIC(RigSimulator, Log, All);
 // Sets default values
 ALFCameraRig::ALFCameraRig()
 	:NumCameraXbyX(32, 32)
+	, CameraGap_mm (10)
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -22,7 +23,6 @@ void ALFCameraRig::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	CameraGap_mm = 10;
 	resolution = 256;
 
 	SpawnCameras();
@@ -49,7 +49,7 @@ void ALFCameraRig::SpawnCameras()
 
 			info.Pos.X = GetActorLocation().X ;
 			info.Pos.Y = GetActorLocation().Y + ix*CameraGap_mm;
-			info.Pos.Z = GetActorLocation().Z + iy*CameraGap_mm;
+			info.Pos.Z = GetActorLocation().Z - iy*CameraGap_mm;
 
 			info.Rot = GetActorRotation();
 		}
@@ -92,6 +92,7 @@ ASceneCapture2D* ALFCameraRig::SpawnCamera(const CameraInfo& info) const
 				captureComp->DetailMode = EDetailMode::DM_High;
 				captureComp->PostProcessSettings.AutoExposureMinBrightness = 1.0f;
 				captureComp->PostProcessSettings.AutoExposureMaxBrightness = 1.0f;
+				captureComp->CaptureSource = SCS_FinalColorLDR;
 
 				FEngineShowFlagsSetting *setting;
 				if (captureComp->GetSettingForShowFlag("Fog", &setting))
@@ -122,6 +123,12 @@ void ALFCameraRig::SpawnHelperLines()
 void ALFCameraRig::TriggerAllCamera()
 {
 	UE_LOG(RigSimulator, Display, TEXT("trigger all camera."));
+	for (const auto& entry : Cameras)
+	{
+		USceneCaptureComponent2D*  capture = entry.capture2d->GetCaptureComponent2D();
+		capture->UpdateContent();
+	}
+
 	SaveAllCamera_Single();
 }
 
